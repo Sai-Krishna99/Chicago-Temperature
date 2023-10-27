@@ -1,0 +1,90 @@
+---
+title: "Final Project Data Prep"
+output: html_notebook
+author: "Sai Krishna"
+date: "`r.format(Sys.Date(), '%B,%d,%y')`"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE) 
+```
+
+```{r include = FALSE}
+setwd("C:/Users/saikr/Desktop/Q4/Time Series/Final Project")
+```
+
+## Load the data
+
+```{r}
+# Set the directory path to your folder containing CSV files
+folder_path <- "Data/csv yearly/"
+
+# Get a list of CSV files in the folder
+csv_files <- list.files(path = folder_path, pattern = "\\.csv$", full.names = TRUE)
+
+# Initialize an empty dataframe to store the merged data
+merged_data <- data.frame()
+
+# Loop through the list of CSV files and merge them
+for (file in csv_files) {
+  data <- read.csv(file)
+  merged_data <- rbind(merged_data, data)
+}
+
+# Print the merged dataframe
+print(head(merged_data))
+
+```
+```{r}
+#Define the start and end dates
+start_date <- as.Date("1970-01-01")
+end_date <- as.Date("2023-07-31")
+
+# Calculate the number of days between start and end dates
+num_days <- as.integer(end_date - start_date) + 1
+
+# Create a sequence of date values at a daily interval
+date_sequence <- seq(from = start_date, by = "days", length.out = num_days)
+
+# Assign the date values to the weather_data dataframe
+merged_data$datetime <- date_sequence
+```
+
+```{r}
+head(merged_data)
+```
+
+
+```{r}
+# Save the merged data as a CSV file
+merged_csv_file <- "final_data_1970_2023.csv"
+write.csv(merged_data, file = merged_csv_file, row.names = FALSE)
+
+# Save the merged data as an RDA file
+merged_rda_file <- "final_data_1970_2023.rda"
+save(merged_data, file = merged_rda_file)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

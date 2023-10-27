@@ -1,0 +1,112 @@
+---
+title: "Final Project TSA"
+output: html_document
+date: "2023-05-18"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tseries)
+library(fpp)
+library(ggplot2)
+library(forecast)
+library(tidyverse)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+df <- read.csv("/Users/default/Documents/2023Spring MSCA Time Series Analysis/Final Project/finalData.csv")
+df_ts <- ts(df, start = c(2012, 121.25), frequency = 365.25)
+plot(df_ts[,'temp'])
+checkresiduals(df_ts[,'temp'])
+```
+```{r}
+df_ts[,'temp'] <- df_ts[,'temp']+50
+df_ts[,'tempmax'] <- df_ts[,'tempmax']+50
+df_ts[,'tempmin'] <- df_ts[,'tempmin']+50
+df_ts_boxcox <- BoxCox(df_ts[,'temp'], lambda = BoxCox.lambda(df_ts[,'temp']))
+checkresiduals(df_ts_boxcox)
+df_ts_boxcox_d1 <- diff(df_ts_boxcox, differences = 1)
+checkresiduals(df_ts_boxcox_d1)
+```
+```{r}
+tseries::kpss.test(df_ts_boxcox_d1, null = "Trend")
+```
+
+```{r}
+df_mon <- df %>%
+  mutate(df, yearmon = str_sub(df[,'datetime'], start = 1, end = 7) ) %>%
+  group_by(yearmon)　%>%
+  mutate(avgMTemp = mean(temp)) %>% 
+  distinct(yearmon,.keep_all = TRUE) %>%
+  select(c(yearmon, avgMTemp))
+
+df_mon <- filter(df_mon, yearmon != "2023-05")
+df_mon_train <- filter(df_mon, yearmon < "2021-05")
+df_mon_test <- filter(df_mon, yearmon >= "2021-05")
+
+df_mon_train_ts <- ts(df_mon_train, start = c(2012, 5), frequency = 12)
+df_mon_train_ts[,'avgMTemp'] <- df_mon_train_ts[,'avgMTemp'] + 50
+plot(df_mon_train_ts[,'avgMTemp'])
+checkresiduals(df_mon_train_ts[,'avgMTemp'])
+
+df_mon_test_ts <- ts(df_mon_test, start = c(2021, 5), frequency = 12)
+df_mon_test_ts[,'avgMTemp'] <- df_mon_test_ts[,'avgMTemp'] + 50
+plot(df_mon_test_ts[,'avgMTemp'])
+checkresiduals(df_mon_test_ts[,'avgMTemp'])
+```
+
+```{r}
+df_mon_ts_boxcox <- BoxCox(df_mon_ts[,'avgMTemp'], lambda = BoxCox.lambda(df_mon_ts[,'avgMTemp']))
+checkresiduals(df_mon_ts_boxcox)
+df_mon_ts_boxcox_d1 <- diff(df_mon_ts_boxcox, differences = 1)
+checkresiduals(df_mon_ts_boxcox_d1)
+```
+
+```{r}
+dec_add <- decompose(df_mon_ts_boxcox, type = 'additive')
+plot(dec_add)
+dec_mul <- decompose(df_mon_ts_boxcox, type = 'multiplicative')
+plot(dec_mul)
+```
+```{r}
+fit_ses <- ses(df_mon_train_ts[,"avgMTemp"], h = 24, alpha = 0.2)
+fit_ses[["mean"]] <- fit_ses[["mean"]] - 50
+fit_ses[["lower"]] <- fit_ses[["lower"]] - 50
+fit_ses[["upper"]] <- fit_ses[["upper"]] - 50
+fit_ses[["x"]] <- fit_ses[["x"]] - 50
+fit_ses[["fitted"]] <- fit_ses[["fitted"]] - 50
+plot(fit_ses, ylab="Temperature(°C)",)
+```
+
+```{r}
+fit_hw_add <- hw(df_mon_train_ts[,"avgMTemp"],　seasonal="additive", h = 24)
+fit_hw_add[["mean"]] <- fit_hw_add[["mean"]] - 50
+fit_hw_add[["lower"]] <- fit_hw_add[["lower"]] - 50
+fit_hw_add[["upper"]] <- fit_hw_add[["upper"]] - 50
+fit_hw_add[["x"]] <- fit_hw_add[["x"]] - 50
+fit_hw_add[["fitted"]] <- fit_hw_add[["fitted"]] - 50
+plot(fit_hw_add, ylab="Temperature(°C)")
+```
+
+```{r}
+accuracy(fit_hw_add, df_mon_test_ts[,"avgMTemp"])
+```
+```{r}
+summary(fit_hw_add)
+```
+
+```{r}
+ls1 <- df_mon_test_ts[,"avgMTemp"]
+ls2 <- fit_hw_add$mean
+mse = mean((ls1-ls2)^2)
+round(mse,2)
+rmse = sqrt(mse)
+round(rmse,2)
+```
+

@@ -1,0 +1,64 @@
+---
+title: "regression"
+author: "Yuki Hirayama"
+date: "2023-05-19"
+output: html_document
+---
+
+```{r}
+# Data Wrangling
+
+library(tidyverse)
+library(tseries)
+library(leaps)
+library(lubridate)
+library(forecast)
+library(gt)
+path <- "C:\\Users\\y1u0u\\Documents\\R\\2223_3_spring\\01_TS\\fp"
+temp <- read_csv(file.path(path, "temp_future.csv"))
+tempmax <- read_csv(file.path(path, "tempmax_future.csv"))
+tempmin <- read_csv(file.path(path, "tempmin_future.csv"))
+
+future <- cbind(temp, tempmax %>% select(-date), tempmin %>% select(-date))
+future <- future %>% select(date, tempmax_predicted, temp_predicted, tempmin_predicted)
+future$date <- ymd(paste0("2023-5-", seq(2, 15, 1)))
+
+png <- gt(future)
+gtsave(png, file.path(path, "future.png"))
+```
+
+```{r}
+future <- future %>% mutate(temp = NA,
+                            tempmax = NA,
+                            tempmin = NA)
+
+past <- read_csv(file.path(path, "finalData.csv"))
+past <- tail(past, 14)
+past <- past %>% select(datetime, temp, tempmax, tempmin)
+colnames(past) <- c("date", "temp", "tempmax", "tempmin")
+past <- past %>% mutate(temp_predicted = NA,
+                        tempmax_predicted = NA,
+                        tempmin_predicted = NA)
+rslt <- rbind(past, future)
+rslt
+rslt_l <- rslt %>% pivot_longer(temp:tempmin_predicted,
+                              names_to = "type", values_to = "temp")
+```
+
+
+```{r}
+rslt_l$type <- factor(rslt_l$type, levels = c("tempmax", "temp", "tempmin",
+                                          "tempmax_predicted", "temp_predicted", "tempmin_predicted"))
+rslt_l %>% 
+  ggplot() +
+  geom_line(aes(x = date, y = temp, col = type), linewidth = 1) +
+  theme_light() +
+  ylab("") +
+  xlab("") +
+  theme(legend.position = "right",
+        legend.title = element_blank())
+```
+
+
+
+

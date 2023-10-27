@@ -1,0 +1,167 @@
+---
+title: "TSA_Final_Project"
+author: "Kishor Kumar Reddy Mannur"
+date: "`r Sys.Date()`"
+output: html_document
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE) 
+```
+
+```{r include = FALSE}
+setwd("C:/Users/saikr/Desktop/Q4/Time Series/Final Project")
+```
+
+```{r}
+#Load necessary libraries for time series analyses
+library(fpp)        # forecasting principles and practice
+library(TSA)        # time series analysis
+library(tseries)    # time series analysis and computational finance
+library(ggplot2)    # plotting
+library(forecast)   # for analyzing uni-variate time series forecasts
+library(vars)       # estimation, lag selection, diagnostic testing, causality analyses
+library(stats)      # statistical analyses
+library(dplyr)      # for data manipulations (filter, arrange, mutate & summarize)
+library(xts)
+library(lubridate)
+```
+
+```{r}
+#Reading the climate data
+weather_data <- read.csv("weather_data.csv")
+head(weather_data)
+summary(weather_data)
+```
+
+```{r}
+#EDA
+#Converting to desired datetime format
+#weather_data$datetime <- as.POSIXct(weather_data$datetime, format = "%m/%d/%Y")
+#weather_data$datetime <- as.POSIXct(weather_data$datetime)
+head(weather_data$datetime)
+```
+```{r}
+#write.csv(weather_data, "File_12_Modified.csv", row.names = FALSE)
+```
+
+
+```{r}
+library(ggplot2)
+
+# Convert datetime column to POSIXct if needed
+weather_data$datetime <- as.POSIXct(weather_data$datetime)
+
+# Filter data for the desired year range (1970 to 2023)
+filtered_data <- subset(weather_data, year(datetime) >= 1970 & year(datetime) <= 2023)
+#
+## Create a ggplot plot
+#ggplot(data = filtered_data, aes(x = datetime, y = temp)) +
+#  geom_line() +
+#  scale_x_datetime(date_labels = "%Y", date_breaks = "1 year") +
+#  labs(x = 'Year', y = 'Temperature', title = "Weather Dataset (1970 to 2023)")
+```
+
+````{r}
+weather_filtered_ts <- ts(filtered_data$temp, start = c(1980, 1), end = c(1983, 12), frequency = 365)
+head(weather_filtered_ts)
+```
+
+```{r}
+plot(weather_filtered_ts, xlab = 'Year', ylab = 'Temperature', main = "Temp Recorded")
+```
+
+```{r}
+#Checking for seasonality and trend in the dataset
+tsdisplay(weather_filtered_ts, main='Temperature 1970 to 2023')
+```
+
+### We can see that the ACF plot follows a sine wave patterns which is indicative of seasonality in the dataset. Also the PACF at lag 0 is 1 and cuts off at 0.5 at lag 1. Using a few techniques, we can remove the seasonal component from the data.
+
+```{r}
+#Checking for ideal lambda value to transform the series using boxcox
+#for (i in -5:5){
+#  boxcox <- BoxCox(weather_filtered_ts, lambda = i)
+#  print(autoplot(boxcox, main = paste("Box-Cox with Lambda =", i)))
+#}
+```
+
+```{r}
+lambda <- BoxCox.lambda(weather_filtered_ts)
+weather_bc <- BoxCox(weather_filtered_ts, BoxCox.lambda(weather_filtered_ts))
+plot(weather_bc, main = paste("Transformed Weather Data with Auto Lambda = ", lambda))
+```
+
+```{r}
+adf_test <- adf.test(weather_filtered_ts)
+print(adf_test)
+```
+### ADF test shows that our data is non-stationary
+
+```{r}
+# Load the necessary library
+library(trend)
+
+# Perform Mann-Kendall test
+mann_kendall_test <- mk.test(weather_filtered_ts)
+print(mann_kendall_test)
+```
+### We can see that the p-value suggests there is no trend in the data, therefore, we proceed with the data as is and apply our models and forecast the data.
+
+```{r}
+# Fit SARIMA model
+sarima_model <- auto.arima(weather_filtered_ts, seasonal = TRUE)
+
+# Forecast using the SARIMA model
+forecast_sarima <- forecast(sarima_model, h = 12)  # Forecast for the next 12 time points
+
+# Plot the SARIMA forecast
+plot(forecast_sarima, main = "SARIMA Forecast")
+```
+
+
+```{r}
+# Fit ETS model
+ets_model <- stlf(weather_filtered_ts)
+
+# Forecast using the ETS model
+forecast_ets <- forecast(ets_model, h = 12)  # Forecast for the next 12 time points
+
+# Plot the ETS forecast
+plot(forecast_ets, main = "ETS Forecast")
+```
+
+
+```{r}
+head(weather_data)
+```
+```{r}
+#Removing NA values
+weather_data <- weather_data[complete.cases(weather_data), ]
+
+# Assuming your data is named 'weather_data'
+# Convert datetime column to POSIXct format
+weather_data$datetime <- as.POSIXct(weather_data$datetime)
+head(weather_data)
+```
+
+````{r}
+# Load the necessary packages
+library(prophet)
+library(dplyr)
+
+# Create a data frame suitable for Prophet
+prophet_data <- weather_data %>%
+  select(ds = datetime, y = temp)
+
+# Fit a Prophet model
+prophet_model <- prophet(prophet_data, yearly.seasonality = TRUE, daily.seasonality=TRUE)
+
+# Make future dataframe for forecasting
+future <- make_future_dataframe(prophet_model, periods = 365)  # Forecast for 365 days
+
+# Forecast using the model
+forecast <- predict(prophet_model, future)
+
+# Plot the forecast
+plot(prophet_model, forecast)
+```

@@ -1,0 +1,198 @@
+---
+title: "Final Project Smoothing"
+output: html_notebook
+author: "Sai Krishna"
+date: "`r format(Sys.Date(), '%B %d, %Y')`"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE) 
+```
+
+```{r include = FALSE}
+setwd("C:/Users/saikr/Desktop/Q4/Time Series/Final Project")
+```
+
+```{r}
+library(forecast)
+library(tseries)
+library(ggplot2)
+library(fpp)
+library(tidyverse)
+```
+
+
+```{r}
+weather_data <- read.csv("final_data_1970_2023.csv")
+```
+
+```{r cars}
+df_ts <- ts(weather_data, start = c(1970, 1), frequency = 365.25)
+df_ts[,'temp'] <- df_ts[,'temp'] +50
+plot(df_ts[,'temp'])
+checkresiduals(df_ts[,'temp'])
+```
+
+```{r}
+df_ts_boxcox <- BoxCox(df_ts[,'temp'], lambda = BoxCox.lambda(df_ts[,'temp']))
+checkresiduals(df_ts_boxcox)
+df_ts_boxcox_d1 <- diff(df_ts_boxcox, differences = 1)
+checkresiduals(df_ts_boxcox_d1)
+```
+```{r}
+Acf(df_ts_boxcox)
+Pacf(df_ts_boxcox)
+```
+
+```{r}
+kpss.test(df_ts_boxcox_d1, null = "Trend")
+```
+```{r}
+adf.test(df_ts_boxcox_d1)
+```
+
+```{r}
+df_mon <- weather_data %>%
+  mutate(weather_data, yearmon = str_sub(weather_data[,'datetime'], start = 1, end = 7) ) %>%
+  group_by(yearmon)　%>%
+  mutate(avgMTemp = mean(temp)) %>% 
+  distinct(yearmon,.keep_all = TRUE) %>%
+  select(c(yearmon, avgMTemp))
+
+df_mon_train <- filter(df_mon, yearmon < "2021-06")
+df_mon_test <- filter(df_mon, yearmon >= "2021-06")
+
+# Split the train and test datasets
+
+df_mon_train.ts <-ts(df_mon_train, start = c(1970, 1), end = c(2021,5), frequency = 12)
+plot(df_mon_train.ts[,'avgMTemp'])
+checkresiduals(df_mon_train.ts[,'avgMTemp'])
+
+df_mon_test.ts <-ts(df_mon_test, start = c(2021,6), end = c(2023,8), frequency = 12)
+plot(df_mon_test.ts[,'avgMTemp'])
+checkresiduals(df_mon_test.ts[,'avgMTemp'])
+```
+
+```{r}
+df_mon_ts = ts(df_mon, start = c(1970, 1), end = c(2023,7), frequency = 12)
+df_mon_ts_boxcox <- BoxCox(df_mon_ts[,'avgMTemp'], lambda = BoxCox.lambda(df_mon_ts[,'avgMTemp']))
+checkresiduals(df_mon_ts_boxcox)
+df_mon_ts_boxcox_d1 <- diff(df_mon_ts_boxcox, differences = 1)
+checkresiduals(df_mon_ts_boxcox_d1)
+```
+```{r}
+dec_add <- decompose(df_mon_ts_boxcox, type = 'additive')
+plot(dec_add)
+dec_mul <- decompose(df_mon_ts_boxcox, type = 'multiplicative')
+plot(dec_mul)
+```
+## Base model
+### Seasonal Naive
+```{r}
+fit.snaive <- snaive(df_mon_train.ts[,"avgMTemp"],
+                 lambda =BoxCox.lambda(df_mon_train.ts[,"avgMTemp"]),
+                 h = 24, damped = TRUE, level = c(80,95))
+  
+summary(fit.snaive)
+```
+
+```{r}
+# Create a plot with forecasted and actual values
+plot <- autoplot(fit.snaive) + autolayer(df_mon_test.ts[,'avgMTemp'])
+
+# Specify the x-axis limits for the last 4 years
+last_year <- 2019
+plot <- plot + scale_x_continuous(
+  limits = c(last_year, 2024),
+  breaks = seq(last_year, 2024, by = 1)
+)
+
+# Display the plot
+print(plot)
+```
+```{r}
+accuracy(fit.snaive, df_mon_test.ts[,"avgMTemp"])
+```
+
+## SES
+```{r}
+fit_ses <- ses(df_mon_train.ts[,"avgMTemp"], h = 24, alpha = 0.2, 
+               lambda =BoxCox.lambda(df_mon_train.ts[,"avgMTemp"]))
+# plot(fit_ses, ylab="Temperature(°C)",)
+# Create a plot with forecasted and actual values
+plot <- autoplot(fit_ses) + autolayer(df_mon_test.ts[,'avgMTemp'])
+
+# Specify the x-axis limits for the last 4 years
+last_year <- 2019
+plot <- plot + scale_x_continuous(
+  limits = c(last_year, 2024),
+  breaks = seq(last_year, 2024, by = 1)
+)
+
+# Display the plot
+print(plot)
+```
+
+```{r}
+accuracy(fit_ses, df_mon_test.ts[,"avgMTemp"])
+```
+## Try the HW additive method using the damping
+
+```{r}
+fit_hw_add <- hw(df_mon_train.ts[,"avgMTemp"],　seasonal="additive", 
+                 lambda =BoxCox.lambda(df_mon_train.ts[,"avgMTemp"]),
+                 h = 27, damped = TRUE, level = c(80,95))
+# plot(fit_hw_add, ylab="Temperature(°C)")
+
+# Create a plot with forecasted and actual values
+plot <- autoplot(fit_hw_add) + autolayer(df_mon_test.ts[,'avgMTemp'])
+
+# Specify the x-axis limits for the last 4 years
+last_year <- 2019
+plot <- plot + scale_x_continuous(
+  limits = c(last_year, 2024),
+  breaks = seq(last_year, 2024, by = 1)
+)
+
+# Display the plot
+print(plot)
+```
+
+```{r}
+accuracy(fit_hw_add, df_mon_test.ts[,"avgMTemp"])
+```
+
+```{r}
+summary(fit_hw_add)
+```
+
+```{r}
+checkresiduals(fit_hw_add)
+```
+
+
+
+```{r}
+ls1 <- df_mon_test.ts[,"avgMTemp"]
+ls2 <- fit_hw_add$mean
+mse = mean((ls1-ls2)^2)
+round(mse,2)
+rmse = sqrt(mse)
+round(rmse,2)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

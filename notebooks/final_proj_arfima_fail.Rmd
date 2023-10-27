@@ -1,0 +1,154 @@
+---
+title: "Final Project Regression with ARIMA Errors"
+output: html_notebook
+author: "Sai Krishna"
+date: "`r format(Sys.Date(), '%B %d, %Y')`"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE) 
+```
+
+```{r include = FALSE}
+setwd("C:/Users/saikr/Desktop/Q4/Time Series/Final Project")
+```
+
+```{r}
+library(forecast)
+library(tseries)
+library(ggplot2)
+library(fpp)
+library(tidyverse)
+library(arfima)
+```
+
+
+```{r}
+weather_data <- read.csv("final_data_2000_2023.csv")
+weather_data$avgTemp = (weather_data$tempmax + weather_data$tempmin)/2
+df_ts <- ts(weather_data, start = c(2000, 1), frequency = 365.25)
+plot(df_ts[,'temp'])
+checkresiduals(df_ts[,'temp'])
+```
+
+```{r}
+df_ts[,'avgTemp'] <- df_ts[,'avgTemp']+50
+df_ts[,'tempmax'] <- df_ts[,'tempmax']+50
+df_ts[,'tempmin'] <- df_ts[,'tempmin']+50
+df_ts[,'temp'] <- df_ts[,'temp']+50
+```
+
+Check for variance in the data
+```{r}
+BoxCox.lambda(df_ts[,'temp'])
+```
+### There is indeed variance in the data and should use lambda 2 for stabilizing it
+
+```{r}
+df_temp_ts <- ts(weather_data, start = c(2000, 1), frequency = 365.25)
+df_temp_ts[,'temp'] <- df_temp_ts[,'temp']+50
+# Box Cox
+df_reg_ts_bc <- diff(BoxCox(df_temp_ts[,"temp"], lambda = 2), differences = 1)
+
+y_day21 <- as.numeric(as.POSIXlt("2021-05-31")$yday)
+train_temp <- window(df_reg_ts_bc, start = c(2000, 1), end = c(2021, y_day21))
+train_temp2 <- window(df_temp_ts, start = c(2000, 1), end = c(2021, y_day21))
+
+yday_23 <- as.numeric(as.POSIXlt("2023-07-31")$yday)
+temp_test <- window(df_reg_ts_bc, start = c(2021, y_day21 + 1), end = c(2023, yday_23))
+temp_test2 <- window(df_temp_ts, start = c(2021, y_day21 + 1), end = c(2023, yday_23))
+```
+
+```{r}
+plot(train_temp2[,'temp'])
+plot(temp_test2[,'temp'])
+plot(train_temp)
+plot(temp_test)
+```
+## ARFIMA model
+
+```{r}
+Acf(train_temp2[,'temp'], lag.max = 100)
+Pacf(train_temp2[,'temp'], lag.max = 100)
+```
+
+```{r}
+train_temp2[,'snow'] <- ifelse(is.na(train_temp2[,'snow']), 0, train_temp2[,'snow'])
+```
+
+
+```{r}
+xreg <- cbind(dew = train_temp2[, "dew"],
+              humidity = train_temp2[, "humidity"],
+              # precipcover = train_temp2[, "precipcover"],
+              # snow = train_temp2[, "snow"],
+              # windspeed = train_temp2[,"windspeed"],
+              sealevelpressure = train_temp2[, "sealevelpressure"],
+              cloudcover = train_temp2[, "cloudcover"],
+              visibility = train_temp2[, "visibility"])
+fit.arfima <- arfima(train_temp, order = c(2, 0, 0), xreg = xreg,
+                     seasonal = list(order = c(0,1,0)), cpus = 10)
+
+```
+
+```{r}
+summary(fit.arfima)
+```
+
+
+```{r}
+plot(tacvf(fit.arfima), maxlag = 30, tacf = TRUE)
+```
+
+
+```{r}
+# plot(forecast_reg)
+# Create a plot with forecasted and actual values
+plot <- autoplot(forecast_reg) + autolayer(temp_test2[,'temp'])
+# Specify the x-axis limits for the last 4 years
+last_year <- 2018
+plot <- plot + scale_x_continuous(
+  limits = c(last_year, 2024),
+  breaks = seq(last_year, 2024, by = 1)
+)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
