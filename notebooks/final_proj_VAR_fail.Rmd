@@ -1,0 +1,165 @@
+---
+title: "Final Project Regression with ARIMA Errors"
+output: html_notebook
+author: "Sai Krishna"
+date: "`r format(Sys.Date(), '%B %d, %Y')`"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE) 
+```
+
+```{r include = FALSE}
+setwd("C:/Users/saikr/Desktop/Q4/Time Series/Final Project")
+```
+
+```{r}
+library(forecast)
+library(tseries)
+library(ggplot2)
+library(fpp)
+library(tidyverse)
+library(vars)
+```
+
+
+```{r}
+weather_data <- read.csv("final_data_2000_2023.csv")
+weather_data$avgTemp = (weather_data$tempmax + weather_data$tempmin)/2
+df_ts <- ts(weather_data, start = c(2000, 1), frequency = 365.25)
+plot(df_ts[,'temp'])
+checkresiduals(df_ts[,'temp'])
+```
+
+```{r}
+df_ts[,'avgTemp'] <- df_ts[,'avgTemp']+50
+df_ts[,'tempmax'] <- df_ts[,'tempmax']+50
+df_ts[,'tempmin'] <- df_ts[,'tempmin']+50
+df_ts[,'temp'] <- df_ts[,'temp']+50
+```
+
+Check for variance in the data
+```{r}
+BoxCox.lambda(df_ts[,'temp'])
+```
+### There is indeed variance in the data and should use lambda 2 for stabilizing it
+
+```{r}
+df_temp_ts <- ts(weather_data, start = c(2000, 1), frequency = 365.25)
+df_temp_ts[,'temp'] <- df_temp_ts[,'temp']+50
+# Box Cox
+df_reg_ts_bc <- diff(BoxCox(df_temp_ts[,"temp"], lambda = 2), differences = 1)
+
+y_day21 <- as.numeric(as.POSIXlt("2021-05-31")$yday)
+train_temp <- window(df_reg_ts_bc, start = c(2000, 1), end = c(2021, y_day21))
+train_temp2 <- window(df_temp_ts, start = c(2000, 1), end = c(2021, y_day21))
+
+yday_23 <- as.numeric(as.POSIXlt("2023-07-31")$yday)
+temp_test <- window(df_reg_ts_bc, start = c(2021, y_day21 + 1), end = c(2023, yday_23))
+temp_test2 <- window(df_temp_ts, start = c(2021, y_day21 + 1), end = c(2023, yday_23))
+```
+
+```{r}
+plot(train_temp2[,'temp'])
+plot(temp_test2[,'temp'])
+plot(train_temp)
+plot(temp_test)
+```
+## VAR model
+
+```{r}
+Acf(train_temp2[,'temp'], lag.max = 100)
+Pacf(train_temp2[,'temp'], lag.max = 100)
+```
+```{r}
+fit.var <- VAR(cbind(BoxCox(train_temp2[,'dew'], lambda = 2),
+                     BoxCox(train_temp2[,'temp'], lambda = 2)), 
+               p = 5, season=365)
+```
+
+
+```{r}
+summary(fit.var)
+```
+
+```{r}
+checkresiduals(fit.var)
+```
+
+
+```{r}
+pred = predict(fit.var, n.ahead = 790)
+y_day21 <- as.numeric(as.POSIXlt("2021-05-31")$yday)
+dew.pred <- ts(pred$fcst$BoxCox.train_temp2....dew....lambda...2.[,1], st = c(2021,y_day21 +1.75), fr = 365.25)
+temp.pred <- ts(pred$fcst$BoxCox.train_temp2....temp....lambda...2.[,1], st = c(2021,y_day21 +1.75), fr = 365.25)
+```
+
+
+```{r}
+# plot(forecast_reg)
+# Create a plot with forecasted and actual values
+plot <- autoplot(window(BoxCox(train_temp2[,'temp'], lambda = 2), start = c(2000), end = c(2021, y_day21))) + 
+  autolayer(BoxCox(temp_test2[,'temp'], lambda = 2)) + autolayer(temp.pred)
+# Specify the x-axis limits for the last 4 years
+last_year <- 2018
+plot <- plot + scale_x_continuous(
+  limits = c(last_year, 2024),
+  breaks = seq(last_year, 2024, by = 1)
+) + xlab("Year") + ylab("Box-Cox Transformed Temperature") + labs(title = "VAR Forecast")
+
+plot <- plot + scale_colour_manual(values = c("red", "blue"),
+                                   labels = c("Test Data", "Forecast"))
+```
+
+
+```{r}
+plot
+```
+```{r}
+plot(resid(fit.var)[,1])
+plot(resid(fit.var)[,2])
+checkresiduals(resid(fit.var)[,1])
+checkresiduals(resid(fit.var)[,2])
+```
+
+
+```{r}
+acf(resid(fit.var)[,1])
+acf(resid(fit.var)[,2])
+```
+
+
+```{r}
+accuracy((BoxCox(temp_test2[,'temp'], lambda = 2)), temp.pred)
+
+# accuracy(temp_test2[,'temp'], temp.pred)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

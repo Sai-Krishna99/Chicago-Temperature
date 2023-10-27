@@ -1,0 +1,128 @@
+---
+title: "Final Project Smoothing"
+output: html_notebook
+author: "Sai Krishna"
+date: "`r format(Sys.Date(), '%B %d, %Y')`"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE) 
+```
+
+```{r include = FALSE}
+setwd("C:/Users/saikr/Desktop/Q4/Time Series/Final Project")
+```
+
+```{r}
+library(forecast)
+library(tseries)
+library(ggplot2)
+library(fpp)
+library(tidyverse)
+```
+
+
+```{r}
+weather_data <- read.csv("final_data_1970_2023.csv")
+```
+
+```{r cars}
+df_ts <- ts(weather_data, start = c(1970, 1), frequency = 365.25)
+df_ts[,'temp'] <- df_ts[,'temp'] + 50
+plot(df_ts[,'temp'])
+checkresiduals(df_ts[,'temp'])
+```
+```{r}
+kpss.test(df_ts[,'temp'])
+adf.test(df_ts[,'temp'])
+```
+
+```{r}
+tsdisplay(df_ts[,'temp'])
+```
+
+
+```{r}
+df_ts_boxcox <- BoxCox(df_ts[,'temp'], lambda = BoxCox.lambda(df_ts[,'temp']))
+checkresiduals(df_ts_boxcox)
+df_ts_boxcox_d1 <- diff(df_ts_boxcox, differences = 1)
+checkresiduals(df_ts_boxcox_d1)
+```
+```{r}
+Acf(df_ts_boxcox_d1)
+Pacf(df_ts_boxcox_d1)
+```
+
+```{r}
+kpss.test(df_ts_boxcox_d1, null = "Trend")
+```
+
+```{r}
+adf.test(df_ts_boxcox_d1)
+```
+
+
+```{r}
+df_temp_ts <- ts(df_ts, start = c(1970, 1), frequency = 365.25)
+# Box Cox
+df_reg_ts_bc <- df_temp_ts
+df_reg_ts_bc[,"temp"] <- BoxCox(df_temp_ts[,"temp"], lambda = 2)
+
+y_day21 <- as.numeric(as.POSIXlt("2021-05-31")$yday)
+train_temp <- window(df_reg_ts_bc, start = c(2000, 1), end = c(2021, y_day21))
+train_temp2 <- window(df_temp_ts, start = c(2000, 1), end = c(2021, y_day21))
+
+yday_23 <- as.numeric(as.POSIXlt("2023-07-31")$yday)
+temp_test <- window(df_reg_ts_bc, start = c(2021, y_day21 + 1), end = c(2023, yday_23))
+temp_test2 <- window(df_temp_ts, start = c(2021, y_day21 + 1), end = c(2023, yday_23))
+```
+
+```{r}
+dec_add <- decompose(df_reg_ts_bc[,'temp'], type = 'additive')
+plot(dec_add)
+dec_mul <- decompose(df_reg_ts_bc[,'temp'], type = 'multiplicative')
+plot(dec_mul)
+```
+## Base model
+
+```{r}
+fit.snaive.daily <- snaive(train_temp2[,"temp"],
+                 lambda =BoxCox.lambda(df_ts[,"temp"]),
+                 h = 730, level = c(80,95))
+  
+summary(fit.snaive.daily)
+```
+
+```{r}
+# Create a plot with forecasted and actual values
+plot <- autoplot(fit.snaive.daily) + autolayer(temp_test2[,'temp'])
+
+# Specify the x-axis limits for the last 4 years
+last_year <- 2018
+plot <- plot + scale_x_continuous(
+  limits = c(last_year, 2024),
+  breaks = seq(last_year, 2024, by = 1)
+)
+
+# Display the plot
+print(plot)
+```
+```{r}
+accuracy(fit.snaive.daily, temp_test2[,"temp"])
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
